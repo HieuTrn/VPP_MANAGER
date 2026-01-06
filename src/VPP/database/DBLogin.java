@@ -7,7 +7,7 @@ import java.sql.ResultSet;
 public class DBLogin {
 
     public static boolean checkdn(String user, String pass) {
-        String sql = "SELECT * FROM Users WHERE username = ? AND password = ?";
+        String sql = "SELECT * FROM TaiKhoan WHERE ten = ? AND matkhau = ?";
 
         try (Connection con = ketnoidb.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
@@ -24,7 +24,7 @@ public class DBLogin {
         return false;
     }
     public static boolean checkdk(String username) {
-        String sql = "SELECT * FROM Users WHERE username = ?";
+        String sql = "SELECT * FROM TaiKhoan WHERE ten = ?";
 
         try (Connection con = ketnoidb.getConnection();
              PreparedStatement ps = con.prepareStatement(sql)) {
@@ -40,7 +40,7 @@ public class DBLogin {
     }
 
     public static boolean chenuser(String username, String password) {
-        String sql = "INSERT INTO Users(username, password) VALUES (?, ?)";
+        String sql = "INSERT INTO TaiKhoan(ten, matkhau) VALUES (?, ?)";
 
         try (Connection con = ketnoidb.getConnection();
              PreparedStatement ps1 = con.prepareStatement(sql)) {

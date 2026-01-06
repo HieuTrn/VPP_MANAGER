@@ -49,7 +49,7 @@ public class Sanphampanel extends javax.swing.JPanel {
     public void loadTable() {
         model.setRowCount(0);
         try {
-            String sql = "SELECT * FROM Products";
+            String sql = "SELECT * FROM SanPham";
             Connection conn = ketnoidb.getConnection();
             PreparedStatement ps = conn.prepareStatement(sql);
             ResultSet rs = ps.executeQuery();
@@ -95,7 +95,7 @@ public class Sanphampanel extends javax.swing.JPanel {
 
         btnOK.addActionListener(ev -> {
             try {
-                String sql = "INSERT INTO Products(maSP, tenSP, giaSP, soluongSP) VALUES(?,?,?,?)";
+                String sql = "INSERT INTO SanPham(maSP, tenSP, giaSP, soluongSP) VALUES(?,?,?,?)";
                 Connection conn = ketnoidb.getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql);
                 ps.setString(1, maField.getText());
@@ -158,7 +158,7 @@ public class Sanphampanel extends javax.swing.JPanel {
 
         btnOK.addActionListener(ev -> {
             try {
-                String sql = "UPDATE Products SET tenSP=?, giaSP=?, soluongSP=? WHERE maSP=?";
+                String sql = "UPDATE SanPham SET tenSP=?, giaSP=?, soluongSP=? WHERE maSP=?";
                 Connection conn = ketnoidb.getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql);
                 ps.setString(1, tenField.getText());
@@ -201,7 +201,7 @@ public class Sanphampanel extends javax.swing.JPanel {
         xoaspp.add(pl, BorderLayout.SOUTH);
         co.addActionListener(ev -> {
             try{
-                String sqll = "DELETE FROM Products WHERE maSP=?";
+                String sqll = "DELETE FROM SanPham WHERE maSP=?";
                 Connection conn = ketnoidb.getConnection();
                 PreparedStatement r = conn.prepareStatement(sqll);
                 r.setString(1,maspp);
@@ -238,7 +238,7 @@ public class Sanphampanel extends javax.swing.JPanel {
         timsp.add(pl, BorderLayout.SOUTH);
         tim.addActionListener(ev -> {
             try{
-                String sql= "SELECT * FROM  Products WHERE tenSP LIKE ?";
+                String sql= "SELECT * FROM  SanPham WHERE tenSP LIKE ?";
                 Connection conn = ketnoidb.getConnection();
                 PreparedStatement r = conn.prepareStatement(sql);
                 r.setString(1,"%"+tf.getText()+"%");

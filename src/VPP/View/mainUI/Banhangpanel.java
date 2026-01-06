@@ -4,8 +4,10 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.sql.*;
-//import java.text.DecimalFormat;
+import java.text.DecimalFormat;
 import VPP.database.ketnoidb;
+
+import java.text.SimpleDateFormat;
 
 class ProductItem {
     private String maSP;
@@ -33,7 +35,7 @@ public class Banhangpanel extends JPanel {
     private JTextField tfSoluong;
     private JLabel lbTongtien;
     private double Tongtien = 0;
-    //private DecimalFormat df = new DecimalFormat("#,###");
+    private DecimalFormat df = new DecimalFormat("#,###");
 
     public Banhangpanel() {
         this.setLayout(new BorderLayout(10, 10));
@@ -109,7 +111,7 @@ public class Banhangpanel extends JPanel {
         cbSanpham.removeAllItems();
         try (Connection conn = ketnoidb.getConnection();
              Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery("SELECT maSP, tenSP FROM Products")) {
+             ResultSet rs = st.executeQuery("SELECT maSP, tenSP FROM SanPham")) {
             
             while (rs.next()) {
                 cbSanpham.addItem(new ProductItem(rs.getString("maSP"), rs.getString("tenSP")));
@@ -149,7 +151,7 @@ public class Banhangpanel extends JPanel {
             conn.setAutoCommit(false); 
 
             // 1. Kiểm tra tồn kho
-            String sqlCheck = "SELECT giaSP, soluongSP FROM Products WHERE maSP = ?";
+            String sqlCheck = "SELECT giaSP, soluongSP FROM SanPham WHERE maSP = ?";
             PreparedStatement pstCheck = conn.prepareStatement(sqlCheck);
             pstCheck.setString(1, maSP_selected);
             ResultSet rs = pstCheck.executeQuery();
@@ -165,7 +167,7 @@ public class Banhangpanel extends JPanel {
                 }
 
                 // 2. Trừ kho trong database
-                String sqlUpdateStock = "UPDATE Products SET soluongSP = soluongSP - ? WHERE maSP = ?";
+                String sqlUpdateStock = "UPDATE SanPham SET soluongSP = soluongSP - ? WHERE maSP = ?";
                 PreparedStatement pstUp = conn.prepareStatement(sqlUpdateStock);
                 pstUp.setInt(1, qty);
                 pstUp.setString(2, maSP_selected);
@@ -204,7 +206,7 @@ public class Banhangpanel extends JPanel {
         if (confirm == JOptionPane.YES_OPTION) {
             try (Connection conn = ketnoidb.getConnection()) {
                 // Cộng trả lại số lượng vào kho
-                String sqlUpdateStock = "UPDATE Products SET soluongSP = soluongSP + ? WHERE maSP = ?";
+                String sqlUpdateStock = "UPDATE SanPham SET soluongSP = soluongSP + ? WHERE maSP = ?";
                 PreparedStatement pst = conn.prepareStatement(sqlUpdateStock);
                 pst.setInt(1, qty);
                 pst.setString(2, maSP);
@@ -232,10 +234,13 @@ public class Banhangpanel extends JPanel {
         try (Connection conn = ketnoidb.getConnection()) {
             conn.setAutoCommit(false);
 
+            Timestamp now = new Timestamp(System.currentTimeMillis());
+
             // 1. Lưu hóa đơn tổng
-            String sqlHD = "INSERT INTO HoaDon (TongTien) VALUES (?)";
+            String sqlHD = "INSERT INTO HoaDon (TongTien, ThoiGian) VALUES (?,?)";
             PreparedStatement pstHD = conn.prepareStatement(sqlHD, Statement.RETURN_GENERATED_KEYS);
             pstHD.setDouble(1, Tongtien);
+            pstHD.setTimestamp(2, now); 
             pstHD.executeUpdate();
 
             long maHDVuaTao = -1;
@@ -245,7 +250,7 @@ public class Banhangpanel extends JPanel {
             }
 
             // 2. Lưu chi tiết hóa đơn sử dụng Batch để tối ưu
-            String sqlCT = "INSERT INTO ChiTietHoaDon (maHD, maSP, tenSP, giaSP, soluongSP) VALUES (?, ?, ?, ?, ?)";
+            String sqlCT = "INSERT INTO ChiTietHoaDon (maHD, maSP, tenSP, giaSP, soluongSP, ThoiGian) VALUES (?, ?, ?, ?, ?, ?)";
             PreparedStatement pstCT = conn.prepareStatement(sqlCT);
 
             for (int i = 0; i < DTbGiohang.getRowCount(); i++) {
@@ -254,13 +259,19 @@ public class Banhangpanel extends JPanel {
                 pstCT.setString(3, DTbGiohang.getValueAt(i, 1).toString());
                 pstCT.setDouble(4, Double.parseDouble(DTbGiohang.getValueAt(i, 3).toString()));
                 pstCT.setInt(5, Integer.parseInt(DTbGiohang.getValueAt(i, 2).toString()));
+                pstCT.setTimestamp(6, now);
                 pstCT.addBatch();
             }
             pstCT.executeBatch();
 
             conn.commit();
-            JOptionPane.showMessageDialog(this, "Thanh toán thành công!\nMã hóa đơn: " + maHDVuaTao);
-            clearCart();
+        
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        JOptionPane.showMessageDialog(this, "Thanh toán thành công!\n" 
+                + "Mã hóa đơn: " + maHDVuaTao + "\n"
+                + "Ngày lập: " + sdf.format(now));
+
+        clearCart();
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -269,7 +280,7 @@ public class Banhangpanel extends JPanel {
     }
 
     private void updateTotalLabel() {
-        lbTongtien.setText("Tổng tiền: " + /*df.format(*/ Tongtien + " VNĐ");
+        lbTongtien.setText("Tổng tiền: " + df.format(Tongtien) + " VNĐ");
     }
 
     private void clearCart() {
