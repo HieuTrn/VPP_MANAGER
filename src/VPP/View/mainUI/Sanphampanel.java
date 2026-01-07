@@ -10,12 +10,12 @@ import VPP.database.ketnoidb;
 
 
 public class Sanphampanel extends javax.swing.JPanel {
-
+    JPanel panel;
     JTable table;
     DefaultTableModel model;
     public Sanphampanel() {
         this.setLayout(new BorderLayout());
-        JPanel panel = new JPanel(new BorderLayout());
+        panel = new JPanel(new BorderLayout());
         model = new DefaultTableModel(
                 new String[]{"Mã SP", "Tên SP", "Giá", "Số lượng"}, 0
         );
