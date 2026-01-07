@@ -138,54 +138,55 @@ public class Banhangpanel extends JPanel {
         String maSP_selected = selectedItem.getMaSP();
         String tenSP_selected = selectedItem.getTenSP();
         
-        int qty;
+        int qtyInput;
         try {
-            qty = Integer.parseInt(tfSoluong.getText().trim());
-            if (qty <= 0) throw new NumberFormatException();
+            qtyInput = Integer.parseInt(tfSoluong.getText().trim());
+            if (qtyInput <= 0) throw new NumberFormatException();
         } catch (NumberFormatException e) {
             JOptionPane.showMessageDialog(this, "Vui lòng nhập số lượng nguyên dương!");
             return;
         }
 
-        try (Connection conn = ketnoidb.getConnection()) {
-            conn.setAutoCommit(false); 
+        // Kiểm tra xem sản phẩm này đã có trong giỏ hàng chưa để cộng dồn số lượng khi check kho
+        int currentQtyInCart = 0;
+        for (int i = 0; i < DTbGiohang.getRowCount(); i++) {
+            if (DTbGiohang.getValueAt(i, 0).toString().equals(maSP_selected)) {
+                currentQtyInCart += Integer.parseInt(DTbGiohang.getValueAt(i, 2).toString());
+            }
+        }
 
-            // 1. Kiểm tra tồn kho
+        try (Connection conn = ketnoidb.getConnection()) {
+            // 1. Chỉ lấy thông tin để kiểm tra, KHÔNG UPDATE
             String sqlCheck = "SELECT giaSP, soluongSP FROM SanPham WHERE maSP = ?";
             PreparedStatement pstCheck = conn.prepareStatement(sqlCheck);
             pstCheck.setString(1, maSP_selected);
             ResultSet rs = pstCheck.executeQuery();
 
             if (rs.next()) {
-                int stock = rs.getInt("soluongSP");
+                int stockDb = rs.getInt("soluongSP");
                 double price = rs.getDouble("giaSP");
+                
+                // Tổng mua = Đang có trong giỏ + Muốn mua thêm
+                int totalQtyWantToBuy = currentQtyInCart + qtyInput;
 
-                if (qty > stock) {
-                    JOptionPane.showMessageDialog(this, "Số lượng tồn kho không đủ! (Còn lại: " + stock + ")");
-                    conn.rollback();
+                if (totalQtyWantToBuy > stockDb) {
+                    JOptionPane.showMessageDialog(this, "Số lượng tồn kho không đủ! (Tồn: " + stockDb + ", Đã trong giỏ: " + currentQtyInCart + ")");
                     return;
                 }
 
-                // 2. Trừ kho trong database
-                String sqlUpdateStock = "UPDATE SanPham SET soluongSP = soluongSP - ? WHERE maSP = ?";
-                PreparedStatement pstUp = conn.prepareStatement(sqlUpdateStock);
-                pstUp.setInt(1, qty);
-                pstUp.setString(2, maSP_selected);
-                pstUp.executeUpdate();
-
-                // 3. Cập nhật JTable (Giỏ hàng)
-                double subTotal = price * qty;
-                DTbGiohang.addRow(new Object[]{maSP_selected, tenSP_selected, qty, price, subTotal});
+                // 2. Nếu đủ hàng -> Thêm vào bảng (JTable) luôn, chưa tác động Database
+                double subTotal = price * qtyInput;
+                
+                // Logic cộng dồn vào dòng cũ nếu đã tồn tại (Tùy chọn, ở đây mình thêm dòng mới như code cũ của bạn)
+                DTbGiohang.addRow(new Object[]{maSP_selected, tenSP_selected, qtyInput, df.format(price), df.format(subTotal)});
                 
                 Tongtien += subTotal;
                 updateTotalLabel();
-
-                conn.commit(); 
                 tfSoluong.setText("");
             }
         } catch (Exception e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Lỗi khi thêm vào giỏ hàng: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, "Lỗi khi kiểm tra kho: " + e.getMessage());
         }
     }
 
@@ -196,32 +197,17 @@ public class Banhangpanel extends JPanel {
             return;
         }
 
-        String maSP = DTbGiohang.getValueAt(selectedRow, 0).toString();
-        int qty = Integer.parseInt(DTbGiohang.getValueAt(selectedRow, 2).toString());
-        double subTotal = Double.parseDouble(DTbGiohang.getValueAt(selectedRow, 4).toString());
+        // Lấy giá trị thành tiền để trừ bớt Tổng tiền
+        double subTotal = Double.parseDouble(DTbGiohang.getValueAt(selectedRow, 4).toString().replace(",", ""));
 
         int confirm = JOptionPane.showConfirmDialog(this, 
-            "Bạn có chắc muốn xóa sản phẩm này?", "Xác nhận", JOptionPane.YES_NO_OPTION);
+            "Bạn có chắc muốn xóa sản phẩm này khỏi giỏ?", "Xác nhận", JOptionPane.YES_NO_OPTION);
         
         if (confirm == JOptionPane.YES_OPTION) {
-            try (Connection conn = ketnoidb.getConnection()) {
-                // Cộng trả lại số lượng vào kho
-                String sqlUpdateStock = "UPDATE SanPham SET soluongSP = soluongSP + ? WHERE maSP = ?";
-                PreparedStatement pst = conn.prepareStatement(sqlUpdateStock);
-                pst.setInt(1, qty);
-                pst.setString(2, maSP);
-                pst.executeUpdate();
-
-                // Cập nhật giao diện
-                Tongtien -= subTotal;
-                updateTotalLabel();
-                DTbGiohang.removeRow(selectedRow);
-
-                JOptionPane.showMessageDialog(this, "Đã xóa và hoàn trả số lượng vào kho!");
-            } catch (Exception e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Lỗi khi hoàn trả kho: " + e.getMessage());
-            }
+            // Chỉ xử lý giao diện
+            Tongtien -= subTotal;
+            updateTotalLabel();
+            DTbGiohang.removeRow(selectedRow);
         }
     }
 
@@ -231,8 +217,10 @@ public class Banhangpanel extends JPanel {
             return;
         }
 
-        try (Connection conn = ketnoidb.getConnection()) {
-            conn.setAutoCommit(false);
+        Connection conn = null;
+        try {
+            conn = ketnoidb.getConnection();
+            conn.setAutoCommit(false); // Bắt đầu Transaction
 
             Timestamp now = new Timestamp(System.currentTimeMillis());
 
@@ -249,33 +237,66 @@ public class Banhangpanel extends JPanel {
                 maHDVuaTao = rsKeys.getLong(1);
             }
 
-            // 2. Lưu chi tiết hóa đơn sử dụng Batch để tối ưu
-            String sqlCT = "INSERT INTO ChiTietHoaDon (maHD, maSP, tenSP, giaSP, soluongSP, ThoiGian) VALUES (?, ?, ?, ?, ?, ?)";
+            // Chuẩn bị 2 câu lệnh: Lưu chi tiết & Trừ kho
+            String sqlCT = "INSERT INTO ChiTietHoaDon (maHD, maSP, tenSP, giaSP, soluongSP, ThanhTien, ThoiGian) VALUES (?, ?, ?, ?, ?, ?, ?)";
+            String sqlUpdateKho = "UPDATE SanPham SET soluongSP = soluongSP - ? WHERE maSP = ?";
+            
             PreparedStatement pstCT = conn.prepareStatement(sqlCT);
+            PreparedStatement pstKho = conn.prepareStatement(sqlUpdateKho);
 
             for (int i = 0; i < DTbGiohang.getRowCount(); i++) {
+                // Xử lý dữ liệu
+                String maSP = DTbGiohang.getValueAt(i, 0).toString();
+                String tenSP = DTbGiohang.getValueAt(i, 1).toString();
+                int soLuong = Integer.parseInt(DTbGiohang.getValueAt(i, 2).toString());
+                
+                // Xóa dấu phẩy tiền tệ
+                double giaSP = Double.parseDouble(DTbGiohang.getValueAt(i, 3).toString().replace(",", ""));
+                double thanhTien = Double.parseDouble(DTbGiohang.getValueAt(i, 4).toString().replace(",", ""));
+
+                // --- A. Thêm vào ChiTietHoaDon ---
                 pstCT.setLong(1, maHDVuaTao);
-                pstCT.setString(2, DTbGiohang.getValueAt(i, 0).toString());
-                pstCT.setString(3, DTbGiohang.getValueAt(i, 1).toString());
-                pstCT.setDouble(4, Double.parseDouble(DTbGiohang.getValueAt(i, 3).toString()));
-                pstCT.setInt(5, Integer.parseInt(DTbGiohang.getValueAt(i, 2).toString()));
-                pstCT.setTimestamp(6, now);
+                pstCT.setString(2, maSP);
+                pstCT.setString(3, tenSP);
+                pstCT.setDouble(4, giaSP);
+                pstCT.setInt(5, soLuong);
+                pstCT.setDouble(6, thanhTien);
+                pstCT.setTimestamp(7, now);
                 pstCT.addBatch();
+
+                // --- B. Trừ kho sản phẩm ---
+                pstKho.setInt(1, soLuong);
+                pstKho.setString(2, maSP);
+                pstKho.addBatch();
             }
+
+            // Thực thi các lệnh
             pstCT.executeBatch();
+            pstKho.executeBatch();
 
-            conn.commit();
-        
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
-        JOptionPane.showMessageDialog(this, "Thanh toán thành công!\n" 
-                + "Mã hóa đơn: " + maHDVuaTao + "\n"
-                + "Ngày lập: " + sdf.format(now));
+            conn.commit(); // Chốt đơn: Lưu hóa đơn VÀ Trừ kho cùng lúc
 
-        clearCart();
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+            JOptionPane.showMessageDialog(this, "Thanh toán thành công!\n" 
+                    + "Mã hóa đơn: " + maHDVuaTao + "\n"
+                    + "Ngày lập: " + sdf.format(now));
+
+            clearCart();
 
         } catch (Exception e) {
+            try {
+                if (conn != null) conn.rollback(); // Nếu lỗi thì hoàn tác tất cả
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+            }
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Lỗi thanh toán: " + e.getMessage());
+        } finally {
+            try {
+                if (conn != null) conn.close();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
         }
     }
 
