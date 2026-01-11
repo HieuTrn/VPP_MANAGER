@@ -95,8 +95,16 @@ public class Sanphampanel extends javax.swing.JPanel {
 
         btnOK.addActionListener(ev -> {
             try {
-                String sql = "INSERT INTO SanPham(maSP, tenSP, giaSP, soluongSP) VALUES(?,?,?,?)";
+                String sqlcheck = "SELECT COUNT(*) FROM SanPham WHERE maSP = ?";
                 Connection conn = ketnoidb.getConnection();
+                PreparedStatement pscheck = conn.prepareStatement(sqlcheck);
+                pscheck.setString(1, maField.getText());
+                ResultSet rs = pscheck.executeQuery();
+                rs.next(); int count = rs.getInt(1);
+                if (count > 0) { JOptionPane.showMessageDialog(dialog, "Mã sản phẩm đã tồn tại, không thể thêm!");
+                    return;  }
+                String sql = "INSERT INTO SanPham(maSP, tenSP, giaSP, soluongSP) VALUES(?,?,?,?)";
+                //Connection conn = ketnoidb.getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql);
                 ps.setString(1, maField.getText());
                 ps.setString(2, tenField.getText());
